@@ -6,8 +6,10 @@ Responsive React workspace for the Inventory & Order Management API.
 
 1. Start MongoDB and the backend server; see `../server/README.md`.
 2. In this folder, run `npm install`.
-3. Copy `.env.example` to `.env` and set `VITE_API_URL` if the backend is not
-   available at `http://localhost:5000`.
+3. Copy `.env.example` to `.env` for local development and set `VITE_API_URL` to
+   the backend base URL. In production, set `VITE_API_URL` in the frontend
+   hosting settings and redeploy; the production build requires this variable.
+   Do not include an API path such as `/products` in the base URL.
 4. Run `npm run dev` and open the local Vite URL.
 
 Anyone can register a staff account. All staff accounts have the same access.
