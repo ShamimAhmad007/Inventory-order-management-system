@@ -1,11 +1,8 @@
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
-
-if (import.meta.env.PROD && !configuredApiUrl) {
-  throw new Error(
-    "VITE_API_URL is not configured. Set it in the frontend hosting settings.",
-  );
-}
+const defaultApiUrl = import.meta.env.PROD
+  ? "https://inventory-order-management-system-1i6m.onrender.com"
+  : "http://localhost:5000";
 
 export const API_URL = (
-  configuredApiUrl || "http://localhost:5000"
+  configuredApiUrl || defaultApiUrl
 ).replace(/\/+$/, "");
