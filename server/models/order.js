@@ -36,7 +36,7 @@ const orderStatusHistorySchema = new mongoose.Schema(
 
 const orderSchema = new mongoose.Schema(
   {
-    orderNumber: { type: String, required: true, unique: true, index: true },
+    orderNumber: { type: String, required: true },
     idempotencyKey: { type: String, default: undefined, maxlength: 100 },
     requestFingerprint: { type: String, default: undefined },
     customer: {
@@ -86,6 +86,7 @@ orderSchema.index(
     partialFilterExpression: { idempotencyKey: { $type: "string" } },
   },
 );
+orderSchema.index({ createdBy: 1, orderNumber: 1 }, { unique: true });
 orderSchema.index({ createdAt: -1, _id: -1 });
 
 const Order = mongoose.model("Order", orderSchema);

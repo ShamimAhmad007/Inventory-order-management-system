@@ -8,8 +8,8 @@ const allowedSorts = {
   quantity: "stock",
 };
 
-export function productAccessFilter() {
-  return {};
+export function productAccessFilter(user) {
+  return { owner: user.id };
 }
 
 function escapeRegex(value) {
@@ -86,7 +86,11 @@ export async function getProducts(req, res) {
 
   const sortField = allowedSorts[req.query.sortBy] ?? "name";
   const sortOrder = req.query.sortOrder === "desc" ? -1 : 1;
-  const productQuery = Product.find(filter).populate("category", "name");
+  const productQuery = Product.find(filter).populate({
+    path: "category",
+    match: { owner: req.user.id },
+    select: "name",
+  });
   const [products, total] = await Promise.all([
     productQuery
       .sort({ [sortField]: sortOrder, _id: 1 })
@@ -111,7 +115,11 @@ export async function getProduct(req, res) {
     ...productAccessFilter(req.user),
     archivedAt: null,
   };
-  const product = await Product.findOne(filter).populate("category", "name");
+  const product = await Product.findOne(filter).populate({
+    path: "category",
+    match: { owner: req.user.id },
+    select: "name",
+  });
   if (!product) {
     return res.status(404).json({ success: false, message: "Product not found" });
   }
@@ -137,7 +145,10 @@ export async function createProduct(req, res) {
       message: "Create the product with zero stock, then use inventory adjustment to add stock",
     });
   }
-  if (fields.category && !(await Category.exists({ _id: fields.category }))) {
+  if (
+    fields.category &&
+    !(await Category.exists({ _id: fields.category, owner: req.user.id }))
+  ) {
     return res.status(400).json({ success: false, message: "Category not found" });
   }
 
@@ -159,7 +170,10 @@ export async function updateProduct(req, res) {
   if (!fields || Object.keys(fields).length === 0) {
     return res.status(400).json({ success: false, message: "Provide valid product fields to update" });
   }
-  if (fields.category && !(await Category.exists({ _id: fields.category }))) {
+  if (
+    fields.category &&
+    !(await Category.exists({ _id: fields.category, owner: req.user.id }))
+  ) {
     return res.status(400).json({ success: false, message: "Category not found" });
   }
 
@@ -171,7 +185,11 @@ export async function updateProduct(req, res) {
     },
     { $set: fields },
     { returnDocument: "after", runValidators: true },
-  ).populate("category", "name");
+  ).populate({
+    path: "category",
+    match: { owner: req.user.id },
+    select: "name",
+  });
   if (!product) {
     return res.status(404).json({ success: false, message: "Product not found" });
   }

@@ -20,8 +20,8 @@ function httpError(message, status) {
   return Object.assign(new Error(message), { status });
 }
 
-function inventoryAccessFilter() {
-  return {};
+function inventoryAccessFilter(user) {
+  return { owner: user.id };
 }
 
 export async function getInventorySummary(req, res) {
@@ -45,7 +45,11 @@ export async function getLowStockProducts(req, res) {
   };
   const [products, total] = await Promise.all([
     Product.find(filter)
-      .populate("category", "name")
+      .populate({
+        path: "category",
+        match: { owner: req.user.id },
+        select: "name",
+      })
       .sort({ stock: 1, name: 1 })
       .skip((page - 1) * limit)
       .limit(limit),
@@ -68,7 +72,11 @@ export async function getOutOfStockProducts(req, res) {
   };
   const [products, total] = await Promise.all([
     Product.find(filter)
-      .populate("category", "name")
+      .populate({
+        path: "category",
+        match: { owner: req.user.id },
+        select: "name",
+      })
       .sort({ name: 1 })
       .skip((page - 1) * limit)
       .limit(limit),
@@ -83,7 +91,7 @@ export async function getOutOfStockProducts(req, res) {
 
 export async function getInventoryMovements(req, res) {
   const { page, limit } = pageSettings(req.query);
-  const filter = {};
+  const filter = { owner: req.user.id };
   if (req.query.productId !== undefined) {
     if (!mongoose.isValidObjectId(req.query.productId)) {
       return res.status(400).json({ success: false, message: "Invalid product id" });
@@ -99,9 +107,21 @@ export async function getInventoryMovements(req, res) {
 
   const [movements, total] = await Promise.all([
     InventoryMovement.find(filter)
-      .populate("product", "name sku")
-      .populate("performedBy", "name email")
-      .populate("order", "orderNumber")
+      .populate({
+        path: "product",
+        match: { owner: req.user.id },
+        select: "name sku",
+      })
+      .populate({
+        path: "performedBy",
+        match: { _id: req.user.id },
+        select: "name email",
+      })
+      .populate({
+        path: "order",
+        match: { createdBy: req.user.id },
+        select: "orderNumber",
+      })
       .sort({ createdAt: -1, _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit),
@@ -159,6 +179,7 @@ export async function adjustStock(req, res) {
         [
           {
             product: product._id,
+            owner: req.user.id,
             change,
             quantityBefore: product.stock,
             quantityAfter: updated.stock,

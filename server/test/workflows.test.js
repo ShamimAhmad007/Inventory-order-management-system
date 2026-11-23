@@ -11,6 +11,9 @@ import { updateProfile } from "../controller/User.controller.js";
 import { createOrder, normalizeOrderItems, toCents, validOrderTransitions } from "../controller/order.controller.js";
 import { createProduct, productAccessFilter } from "../controller/product.controller.js";
 import User from "../models/User.js";
+import Category from "../models/category.js";
+import Customer from "../models/customer.js";
+import InventoryMovement from "../models/inventory.js";
 import Product from "../models/product.js";
 
 function createResponse() {
@@ -55,6 +58,7 @@ test("product schema accepts two-decimal prices and rejects fractional stock", a
   const product = new Product({
     name: "Keyboard",
     sku: "KEY-001",
+    owner: new mongoose.Types.ObjectId(),
     category: new mongoose.Types.ObjectId(),
     price: 49.99,
     stock: 5,
@@ -69,12 +73,15 @@ test("product schema accepts two-decimal prices and rejects fractional stock", a
   await assert.rejects(product.validate(), (error) => Boolean(error.errors.price));
 });
 
-test("product access includes the shared workspace", () => {
-  assert.deepEqual(productAccessFilter(), {});
+test("product access is scoped to the authenticated user", () => {
+  assert.deepEqual(productAccessFilter({ id: "user-1" }), { owner: "user-1" });
 });
 
-test("customer order history includes all workspace orders for that customer", () => {
-  assert.deepEqual(customerOrderFilter("customer-1"), { customer: "customer-1" });
+test("customer order history is scoped to the authenticated user", () => {
+  assert.deepEqual(customerOrderFilter("customer-1", "user-1"), {
+    customer: "customer-1",
+    createdBy: "user-1",
+  });
 });
 
 test("user accounts do not include role-based access", () => {
@@ -90,6 +97,12 @@ test("products can be owned by users without requiring a category", async () => 
     stock: 5,
   });
   await product.validate();
+});
+
+test("business data models require an owner", () => {
+  for (const model of [Product, Category, Customer, InventoryMovement]) {
+    assert.equal(model.schema.path("owner").isRequired, true);
+  }
 });
 
 test("order item normalization merges duplicate products and validates quantities", () => {

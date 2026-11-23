@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Category from "../models/category.js";
 import Customer from "../models/customer.js";
 import Order from "../models/order.js";
@@ -12,10 +13,12 @@ function roundMoney(value) {
   return Number((value ?? 0).toFixed(2));
 }
 export async function getDashboardSummary(req, res) {
+  const owner = new mongoose.Types.ObjectId(req.user.id);
   const productFilter = {
+    owner,
     archivedAt: null,
   };
-  const orderFilter = {};
+  const orderFilter = { createdBy: owner };
   const threshold = getLowStockThreshold();
   const now = new Date();
   const currentMonthStart = new Date(
@@ -51,8 +54,8 @@ export async function getDashboardSummary(req, res) {
         },
       },
     ]),
-    Category.countDocuments(),
-    Customer.countDocuments(),
+    Category.countDocuments({ owner }),
+    Customer.countDocuments({ owner }),
     Order.aggregate([
       { $match: orderFilter },
       { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -110,7 +113,11 @@ export async function getDashboardSummary(req, res) {
       { $sort: { _id: 1 } },
     ]),
     Order.find(orderFilter)
-      .populate("customer", "name")
+      .populate({
+        path: "customer",
+        match: { owner },
+        select: "name",
+      })
       .populate("createdBy", "name")
       .sort({ createdAt: -1, _id: -1 })
       .limit(5),

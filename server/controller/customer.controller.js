@@ -11,8 +11,8 @@ function pageSettings(query) {
   return { page, limit };
 }
 
-export function customerOrderFilter(customerId) {
-  return { customer: customerId };
+export function customerOrderFilter(customerId, userId) {
+  return { customer: customerId, createdBy: userId };
 }
 
 function normalizeCustomerInput(body, { partial = false } = {}) {
@@ -39,13 +39,14 @@ function normalizeCustomerInput(body, { partial = false } = {}) {
   return fields;
 }
 
-async function contactAlreadyExists(fields, exceptId) {
+async function contactAlreadyExists(fields, userId, exceptId) {
   const conditions = [];
   if (fields.email) conditions.push({ email: fields.email });
   if (fields.phone) conditions.push({ phone: fields.phone });
   if (conditions.length === 0) return false;
   return Boolean(
     await Customer.exists({
+      owner: userId,
       ...(exceptId ? { _id: { $ne: exceptId } } : {}),
       $or: conditions,
     }),
@@ -54,7 +55,7 @@ async function contactAlreadyExists(fields, exceptId) {
 
 export async function getCustomers(req, res) {
   const { page, limit } = pageSettings(req.query);
-  const filter = {};
+  const filter = { owner: req.user.id };
   if (typeof req.query.search === "string" && req.query.search.trim()) {
     const escaped = req.query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const search = new RegExp(escaped, "i");
@@ -82,13 +83,13 @@ export async function createCustomer(req, res) {
       message: "Provide a name and at least one valid contact method (email or phone)",
     });
   }
-  if (await contactAlreadyExists(fields)) {
+  if (await contactAlreadyExists(fields, req.user.id)) {
     return res.status(409).json({
       success: false,
       message: "A customer with that email or phone already exists",
     });
   }
-  const customer = await Customer.create(fields);
+  const customer = await Customer.create({ ...fields, owner: req.user.id });
   return res.status(201).json({ success: true, message: "Customer created", customer });
 }
 
@@ -96,7 +97,10 @@ export async function getCustomer(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(400).json({ success: false, message: "Invalid customer id" });
   }
-  const customer = await Customer.findById(req.params.id);
+  const customer = await Customer.findOne({
+    _id: req.params.id,
+    owner: req.user.id,
+  });
   if (!customer) {
     return res.status(404).json({ success: false, message: "Customer not found" });
   }
@@ -111,7 +115,10 @@ export async function updateCustomer(req, res) {
   if (!fields || Object.keys(fields).length === 0) {
     return res.status(400).json({ success: false, message: "Provide valid customer fields" });
   }
-  const existing = await Customer.findById(req.params.id);
+  const existing = await Customer.findOne({
+    _id: req.params.id,
+    owner: req.user.id,
+  });
   if (!existing) {
     return res.status(404).json({ success: false, message: "Customer not found" });
   }
@@ -125,7 +132,7 @@ export async function updateCustomer(req, res) {
       message: "A customer must have at least one contact method",
     });
   }
-  if (await contactAlreadyExists(fields, req.params.id)) {
+  if (await contactAlreadyExists(fields, req.user.id, req.params.id)) {
     return res.status(409).json({
       success: false,
       message: "A customer with that email or phone already exists",
@@ -143,18 +150,29 @@ export async function deleteCustomer(req, res) {
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
-      const customer = await Customer.findById(req.params.id).session(session);
+      const customer = await Customer.findOne({
+        _id: req.params.id,
+        owner: req.user.id,
+      }).session(session);
       if (!customer) {
         const error = new Error("Customer not found");
         error.status = 404;
         throw error;
       }
-      if (await Order.exists({ customer: req.params.id }).session(session)) {
+      if (
+        await Order.exists({
+          customer: req.params.id,
+          createdBy: req.user.id,
+        }).session(session)
+      ) {
         const error = new Error("Cannot delete a customer with order history");
         error.status = 409;
         throw error;
       }
-      await Customer.deleteOne({ _id: req.params.id }, { session });
+      await Customer.deleteOne(
+        { _id: req.params.id, owner: req.user.id },
+        { session },
+      );
     });
   } finally {
     await session.endSession();
@@ -166,11 +184,16 @@ export async function getCustomerOrders(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(400).json({ success: false, message: "Invalid customer id" });
   }
-  if (!(await Customer.exists({ _id: req.params.id }))) {
+  if (
+    !(await Customer.exists({
+      _id: req.params.id,
+      owner: req.user.id,
+    }))
+  ) {
     return res.status(404).json({ success: false, message: "Customer not found" });
   }
   const { page, limit } = pageSettings(req.query);
-  const orderFilter = customerOrderFilter(req.params.id);
+  const orderFilter = customerOrderFilter(req.params.id, req.user.id);
   const [orders, total] = await Promise.all([
     Order.find(orderFilter)
       .populate("createdBy", "name email")

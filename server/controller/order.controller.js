@@ -107,10 +107,13 @@ export async function createOrder(req, res) {
   let orderId;
   try {
     await session.withTransaction(async () => {
-      const customer = await Customer.findById(customerId).session(session);
+      const customer = await Customer.findOne({
+        _id: customerId,
+        owner: req.user.id,
+      }).session(session);
       if (!customer) throw httpError("Customer not found", 404);
       const customerUpdate = await Customer.updateOne(
-        { _id: customer._id },
+        { _id: customer._id, owner: req.user.id },
         { $inc: { orderCount: 1 } },
         { session },
       );
@@ -121,6 +124,7 @@ export async function createOrder(req, res) {
       const productIds = items.map((item) => item.productId);
       const productFilter = {
         _id: { $in: productIds },
+        owner: req.user.id,
         archivedAt: null,
       };
       const products = await Product.find(productFilter).session(session);
@@ -159,7 +163,11 @@ export async function createOrder(req, res) {
       for (const item of items) {
         const product = productById.get(item.productId);
         const updated = await Product.findOneAndUpdate(
-          { _id: product._id, stock: { $gte: item.quantity } },
+          {
+            _id: product._id,
+            owner: req.user.id,
+            stock: { $gte: item.quantity },
+          },
           { $inc: { stock: -item.quantity } },
           { returnDocument: "after", session, runValidators: true },
         );
@@ -168,6 +176,7 @@ export async function createOrder(req, res) {
         }
         movementEntries.push({
           product: product._id,
+          owner: req.user.id,
           change: -item.quantity,
           quantityBefore: updated.stock + item.quantity,
           quantityAfter: updated.stock,
@@ -225,15 +234,19 @@ export async function createOrder(req, res) {
     await session.endSession();
   }
 
-  const order = await Order.findById(orderId)
-    .populate("customer", "name email phone address")
+  const order = await Order.findOne({ _id: orderId, createdBy: req.user.id })
+    .populate({
+      path: "customer",
+      match: { owner: req.user.id },
+      select: "name email phone address",
+    })
     .populate("createdBy", "name email");
   return res.status(201).json({ success: true, message: "Order created", order });
 }
 
 export async function getOrders(req, res) {
   const { page, limit } = pageSettings(req.query);
-  const filter = {};
+  const filter = { createdBy: req.user.id };
 
   if (req.query.status !== undefined) {
     if (!["Pending", "Processing", "Completed", "Cancelled"].includes(req.query.status)) {
@@ -266,8 +279,17 @@ export async function getOrders(req, res) {
 
   const [orders, total] = await Promise.all([
     Order.find(filter)
-      .populate("customer", "name email phone")
+      .populate({
+        path: "customer",
+        match: { owner: req.user.id },
+        select: "name email phone",
+      })
       .populate("createdBy", "name email")
+      .populate({
+        path: "statusHistory.changedBy",
+        match: { _id: req.user.id },
+        select: "name email",
+      })
       .sort({ createdAt: -1, _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit),
@@ -284,11 +306,19 @@ export async function getOrder(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(400).json({ success: false, message: "Invalid order id" });
   }
-  const filter = { _id: req.params.id };
+  const filter = { _id: req.params.id, createdBy: req.user.id };
   const order = await Order.findOne(filter)
-    .populate("customer", "name email phone address")
+    .populate({
+      path: "customer",
+      match: { owner: req.user.id },
+      select: "name email phone address",
+    })
     .populate("createdBy", "name email")
-    .populate("statusHistory.changedBy", "name email");
+    .populate({
+      path: "statusHistory.changedBy",
+      match: { _id: req.user.id },
+      select: "name email",
+    });
   if (!order) {
     return res.status(404).json({ success: false, message: "Order not found" });
   }
@@ -315,7 +345,10 @@ export async function updateOrderStatus(req, res) {
   let orderId;
   try {
     await session.withTransaction(async () => {
-      const order = await Order.findById(req.params.id).session(session);
+      const order = await Order.findOne({
+        _id: req.params.id,
+        createdBy: req.user.id,
+      }).session(session);
       if (!order) throw httpError("Order not found", 404);
       if (!validOrderTransitions[order.status].includes(status)) {
         throw httpError(`Cannot change order from ${order.status} to ${status}`, 409);
@@ -323,7 +356,10 @@ export async function updateOrderStatus(req, res) {
 
       if (status === "Cancelled") {
         for (const item of order.items) {
-          const product = await Product.findById(item.product).session(session);
+          const product = await Product.findOne({
+            _id: item.product,
+            owner: req.user.id,
+          }).session(session);
           if (!product) {
             throw httpError(`Product ${item.sku} is no longer available`, 409);
           }
@@ -332,7 +368,7 @@ export async function updateOrderStatus(req, res) {
             throw httpError(`Restoring stock for ${item.sku} exceeds the supported limit`, 409);
           }
           const updated = await Product.findOneAndUpdate(
-            { _id: item.product, stock: product.stock },
+            { _id: item.product, owner: req.user.id, stock: product.stock },
             { $inc: { stock: item.quantity } },
             { returnDocument: "after", session, runValidators: true },
           );
@@ -341,6 +377,7 @@ export async function updateOrderStatus(req, res) {
             [
               {
                 product: item.product,
+                owner: req.user.id,
                 change: item.quantity,
                 quantityBefore: updated.stock - item.quantity,
                 quantityAfter: updated.stock,
@@ -368,10 +405,18 @@ export async function updateOrderStatus(req, res) {
     await session.endSession();
   }
 
-  const order = await Order.findById(orderId)
-    .populate("customer", "name email phone address")
+  const order = await Order.findOne({ _id: orderId, createdBy: req.user.id })
+    .populate({
+      path: "customer",
+      match: { owner: req.user.id },
+      select: "name email phone address",
+    })
     .populate("createdBy", "name email")
-    .populate("statusHistory.changedBy", "name email");
+    .populate({
+      path: "statusHistory.changedBy",
+      match: { _id: req.user.id },
+      select: "name email",
+    });
   return res.json({ success: true, message: "Order status updated", order });
 }
 

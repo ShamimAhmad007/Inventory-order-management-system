@@ -3,12 +3,21 @@ import Category from "../models/category.js";
 import Product from "../models/product.js";
 
 export async function getCategories(req, res) {
+  const owner = new mongoose.Types.ObjectId(req.user.id);
   const categories = await Category.aggregate([
+    { $match: { owner } },
     {
       $lookup: {
         from: "products",
-        localField: "_id",
-        foreignField: "category",
+        let: { categoryId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$category", "$$categoryId"] },
+              owner,
+            },
+          },
+        ],
         as: "products",
       },
     },
@@ -41,6 +50,7 @@ export async function createCategory(req, res) {
   const category = await Category.create({
     name: name.trim(),
     description: description.trim(),
+    owner: req.user.id,
   });
   return res.status(201).json({
     success: true,
@@ -71,15 +81,18 @@ export async function updateCategory(req, res) {
     return res.status(400).json({ success: false, message: "Provide fields to update" });
   }
 
-  const category = await Category.findByIdAndUpdate(
-    req.params.id,
+  const category = await Category.findOneAndUpdate(
+    { _id: req.params.id, owner: req.user.id },
     { $set: updates },
     { returnDocument: "after", runValidators: true },
   );
   if (!category) {
     return res.status(404).json({ success: false, message: "Category not found" });
   }
-  const productCount = await Product.countDocuments({ category: category._id });
+  const productCount = await Product.countDocuments({
+    category: category._id,
+    owner: req.user.id,
+  });
   return res.json({
     success: true,
     message: "Category updated",
@@ -91,11 +104,14 @@ export async function deleteCategory(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(400).json({ success: false, message: "Invalid category id" });
   }
-  const category = await Category.findById(req.params.id);
+  const category = await Category.findOne({
+    _id: req.params.id,
+    owner: req.user.id,
+  });
   if (!category) {
     return res.status(404).json({ success: false, message: "Category not found" });
   }
-  if (await Product.exists({ category: category._id })) {
+  if (await Product.exists({ category: category._id, owner: req.user.id })) {
     return res.status(409).json({
       success: false,
       message: "Cannot delete a category that has products",

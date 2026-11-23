@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "migrate:tenant-indexes": "node scripts/migrate-tenant-indexes.js",
     "test": "node --test"
   },
   "keywords": [],

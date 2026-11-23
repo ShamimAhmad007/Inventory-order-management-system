@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const inventoryMovementSchema = new mongoose.Schema(
   {
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
@@ -38,7 +43,7 @@ const inventoryMovementSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-inventoryMovementSchema.index({ createdAt: -1, _id: -1 });
+inventoryMovementSchema.index({ owner: 1, createdAt: -1, _id: -1 });
 
 const InventoryMovement = mongoose.model(
   "InventoryMovement",

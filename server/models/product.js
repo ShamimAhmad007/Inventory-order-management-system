@@ -23,7 +23,6 @@ const productSchema = new mongoose.Schema(
     sku: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       uppercase: true,
       maxlength: 64,
@@ -32,7 +31,11 @@ const productSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
     },
-    owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
     archivedAt: { type: Date, default: null, index: true },
     price: {
       type: Number,
@@ -61,6 +64,7 @@ const productSchema = new mongoose.Schema(
 
 productSchema.index({ name: 1 });
 productSchema.index({ category: 1, stock: 1 });
+productSchema.index({ owner: 1, sku: 1 }, { unique: true });
 
 const Product = mongoose.model("Product", productSchema);
 export default Product;

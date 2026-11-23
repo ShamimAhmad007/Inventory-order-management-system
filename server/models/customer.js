@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const customerSchema = new mongoose.Schema(
   {
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
     name: { type: String, required: true, trim: true, maxlength: 150 },
     email: {
       type: String,
@@ -23,11 +28,11 @@ const customerSchema = new mongoose.Schema(
 );
 
 customerSchema.index(
-  { email: 1 },
+  { owner: 1, email: 1 },
   { unique: true, partialFilterExpression: { email: { $type: "string" } } },
 );
 customerSchema.index(
-  { phone: 1 },
+  { owner: 1, phone: 1 },
   { unique: true, partialFilterExpression: { phone: { $type: "string" } } },
 );
 

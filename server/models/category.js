@@ -5,9 +5,13 @@ const categorySchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       maxlength: 100,
+    },
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
     description: {
       type: String,
@@ -18,6 +22,8 @@ const categorySchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+categorySchema.index({ owner: 1, name: 1 }, { unique: true });
 
 const Category = mongoose.model("Category", categorySchema);
 export default Category;
