@@ -22,9 +22,9 @@ const port = Number(process.env.PORT) || 5000;
 app.use(cors(corsOptions));
 app.use(express.json({ limit: "1mb" }));
 
-// app.get("/", (req, res) => {
-//   res.json({ success: true, message: "Inventory & Order API is running" });
-// });
+app.get("/", (req, res) => {
+  res.json({ success: true, message: "Inventory & Order API is running" });
+});
 
 app.use("/auth", authRoutes);
 app.use("/users", userRoutes);
