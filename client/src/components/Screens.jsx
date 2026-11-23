@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { queryString, request } from "../lib/api.js";
 
 const money = (value) =>
-  new Intl.NumberFormat("en-US", {
+  new Intl.NumberFormat("en-IN", {
     style: "currency",
-    currency: "rupee",
+    currency: "INR",
     maximumFractionDigits: 2,
   }).format(Number(value) || 0);
 const date = (value) =>
