@@ -4,7 +4,7 @@ import { queryString, request } from "../lib/api.js";
 const money = (value) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "rupees",
+    currency: "rupee",
     maximumFractionDigits: 2,
   }).format(Number(value) || 0);
 const date = (value) =>
