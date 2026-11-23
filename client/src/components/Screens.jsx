@@ -4,7 +4,7 @@ import { queryString, request } from "../lib/api.js";
 const money = (value) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: "rupees",
     maximumFractionDigits: 2,
   }).format(Number(value) || 0);
 const date = (value) =>
@@ -1779,7 +1779,9 @@ export function OrdersScreen({ token, onNotify }) {
   async function updateStatus(status) {
     if (
       status === "Cancelled" &&
-      !window.confirm(`Cancel order ${selected.orderNumber}? Stock will be restored.`)
+      !window.confirm(
+        `Cancel order ${selected.orderNumber}? Stock will be restored.`,
+      )
     ) {
       return;
     }
@@ -2522,7 +2524,11 @@ function ProfileForm({ token, user, onNotify, onProfileUpdated }) {
         body,
       });
       onProfileUpdated(result.user);
-      setForm((current) => ({ ...current, currentPassword: "", newPassword: "" }));
+      setForm((current) => ({
+        ...current,
+        currentPassword: "",
+        newPassword: "",
+      }));
       onNotify("Profile updated");
     } catch (requestError) {
       setActionError(requestError.message);
@@ -2552,7 +2558,9 @@ function ProfileForm({ token, user, onNotify, onProfileUpdated }) {
           <input
             autoComplete="email"
             maxLength="254"
-            onChange={(event) => setForm({ ...form, email: event.target.value })}
+            onChange={(event) =>
+              setForm({ ...form, email: event.target.value })
+            }
             required
             type="email"
             value={form.email}
@@ -2578,10 +2586,16 @@ function ProfileForm({ token, user, onNotify, onProfileUpdated }) {
             type="password"
             value={form.newPassword}
           />
-          <small>Leave password fields empty to keep your current password.</small>
+          <small>
+            Leave password fields empty to keep your current password.
+          </small>
         </Field>
         <div className="form-actions">
-          <button className="button button-primary" disabled={saving} type="submit">
+          <button
+            className="button button-primary"
+            disabled={saving}
+            type="submit"
+          >
             {saving ? "Saving…" : "Save profile"}
           </button>
         </div>
@@ -2868,12 +2882,7 @@ export function DashboardSummaryScreen({ token, onNavigate }) {
 
 export function DashboardScreen({ token, onNavigate }) {
   const [refreshKey, setRefreshKey] = useState(0);
-  const { data, loading, error } = useLoad(
-    token,
-    "/dashboard",
-    {},
-    refreshKey,
-  );
+  const { data, loading, error } = useLoad(token, "/dashboard", {}, refreshKey);
   const summary = data ?? {};
   const recentOrders = summary.recentOrders ?? [];
   const inventory = summary.inventory ?? {};
@@ -2910,9 +2919,7 @@ export function DashboardScreen({ token, onNavigate }) {
           <div className="stats-grid">
             <MetricCard
               label="Products"
-              value={
-                inventory.productCount ?? 0
-              }
+              value={inventory.productCount ?? 0}
               detail="Items in your catalog"
               tone="stat-sage"
               symbol="▦"
@@ -2926,8 +2933,10 @@ export function DashboardScreen({ token, onNavigate }) {
             />
             <MetricCard
               label="Open orders"
-              value={(orderStats.byStatus?.Pending ?? 0) +
-                (orderStats.byStatus?.Processing ?? 0)}
+              value={
+                (orderStats.byStatus?.Pending ?? 0) +
+                (orderStats.byStatus?.Processing ?? 0)
+              }
               detail="Pending or being processed"
               tone="stat-blue"
               symbol="↗"
